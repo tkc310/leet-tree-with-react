@@ -180,6 +180,67 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
     }
   }, []);
 
+  const findParentNode = useCallback(
+    (current: Node<string>, target: Node<string>): Node<string> | null => {
+      if (current.children.includes(target)) {
+        return current;
+      }
+      for (const child of current.children) {
+        const found = findParentNode(child, target);
+        if (found) return found;
+      }
+      return null;
+    },
+    []
+  );
+
+  const renderNode = useCallback(
+    (node: Node<string>, position: THREE.Vector3, depth: number = 0) => {
+      if (!sceneRef.current) return;
+
+      const nodeMesh = createNodeMesh(node.data, node);
+      nodeMesh.position.copy(position);
+
+      // 選択されたノードの色を変更
+      if (node === selectedNode) {
+        const sphere = nodeMesh.children[0] as THREE.Mesh;
+        const material = sphere.material as THREE.MeshPhongMaterial;
+        material.color.set(0xe040fb); // 明るい紫
+        material.emissive.set(0x7b1fa2); // 暗めの紫
+        material.emissiveIntensity = 0.4;
+      }
+
+      sceneRef.current.add(nodeMesh);
+
+      // 子ノードの描画
+      const childCount = node.children.length;
+      const spacing = Math.min(2, 4 / (depth + 1));
+
+      node.children.forEach((child, index) => {
+        const childPosition = new THREE.Vector3(
+          position.x + (index - (childCount - 1) / 2) * spacing,
+          position.y - 1.5,
+          position.z
+        );
+
+        // 親子を結ぶ線を描画
+        const points = [position, childPosition];
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+        const lineMaterial = new THREE.LineBasicMaterial({
+          color: 0x9c27b0,
+          transparent: true,
+          opacity: 0.6,
+          linewidth: 2,
+        });
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+        sceneRef.current?.add(line);
+
+        renderNode(child, childPosition, depth + 1);
+      });
+    },
+    [selectedNode]
+  );
+
   const renderTree = useCallback(() => {
     if (!tree.root || !sceneRef.current) return;
 
@@ -203,7 +264,7 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
 
     // ルートノードから描画開始
     renderNode(tree.root, new THREE.Vector3(0, 5, 0));
-  }, [tree.root]);
+  }, [tree.root, renderNode]);
 
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -226,63 +287,8 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
         }
       }
     },
-    [selectedNode, tree.root, renderTree]
+    [selectedNode, tree.root, renderTree, findParentNode]
   );
-
-  const findParentNode = (current: Node<string>, target: Node<string>): Node<string> | null => {
-    if (current.children.includes(target)) {
-      return current;
-    }
-    for (const child of current.children) {
-      const found = findParentNode(child, target);
-      if (found) return found;
-    }
-    return null;
-  };
-
-  const renderNode = (node: Node<string>, position: THREE.Vector3, depth: number = 0) => {
-    if (!sceneRef.current) return;
-
-    const nodeMesh = createNodeMesh(node.data, node);
-    nodeMesh.position.copy(position);
-
-    // 選択されたノードの色を変更
-    if (node === selectedNode) {
-      const sphere = nodeMesh.children[0] as THREE.Mesh;
-      const material = sphere.material as THREE.MeshPhongMaterial;
-      material.color.set(0xe040fb); // 明るい紫
-      material.emissive.set(0x7b1fa2); // 暗めの紫
-      material.emissiveIntensity = 0.4;
-    }
-
-    sceneRef.current.add(nodeMesh);
-
-    // 子ノードの描画
-    const childCount = node.children.length;
-    const spacing = Math.min(2, 4 / (depth + 1));
-
-    node.children.forEach((child, index) => {
-      const childPosition = new THREE.Vector3(
-        position.x + (index - (childCount - 1) / 2) * spacing,
-        position.y - 1.5,
-        position.z
-      );
-
-      // 親子を結ぶ線を描画
-      const points = [position, childPosition];
-      const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMaterial = new THREE.LineBasicMaterial({
-        color: 0x9c27b0,
-        transparent: true,
-        opacity: 0.6,
-        linewidth: 2,
-      });
-      const line = new THREE.Line(lineGeometry, lineMaterial);
-      sceneRef.current?.add(line);
-
-      renderNode(child, childPosition, depth + 1);
-    });
-  };
 
   const updateCursor = (isOverNode: boolean) => {
     if (containerRef.current) {
