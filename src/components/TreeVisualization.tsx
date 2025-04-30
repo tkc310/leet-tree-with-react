@@ -21,7 +21,8 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
   const lastHoveredNodeRef = useRef<Node<string> | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     // シーンの初期化
     const scene = new THREE.Scene();
@@ -42,7 +43,7 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    containerRef.current.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
     // コントロールの設定
@@ -88,9 +89,11 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
     // クリーンアップ
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
+      if (container && renderer.domElement) {
+        container.removeChild(renderer.domElement);
       }
+      renderer.dispose();
+      controls.dispose();
     };
   }, []);
 
