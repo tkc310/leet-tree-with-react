@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { motion } from 'framer-motion';
 import { Tree, Node } from '../types/Tree';
@@ -151,7 +151,7 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
     return group;
   };
 
-  const handleClick = (event: MouseEvent) => {
+  const handleClick = useCallback((event: MouseEvent) => {
     if (!sceneRef.current || !cameraRef.current) return;
 
     // マウス位置の正規化
@@ -178,41 +178,9 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
     } else {
       setSelectedNode(null);
     }
-  };
+  }, []);
 
-  const handleKeyPress = (event: KeyboardEvent) => {
-    if (!selectedNode) return;
-
-    if (event.key === 'a' || event.key === 'A') {
-      // ノードの追加
-      const newNode = selectedNode.add(`Child ${selectedNode.children.length + 1}`);
-      setSelectedNode(newNode);
-      renderTree();
-    } else if (event.key === 'd' || event.key === 'D') {
-      // ノードの削除
-      if (selectedNode !== tree.root) {
-        const parent = findParentNode(tree.root!, selectedNode);
-        if (parent) {
-          parent.remove(selectedNode.data);
-          setSelectedNode(null);
-          renderTree();
-        }
-      }
-    }
-  };
-
-  const findParentNode = (current: Node<string>, target: Node<string>): Node<string> | null => {
-    if (current.children.includes(target)) {
-      return current;
-    }
-    for (const child of current.children) {
-      const found = findParentNode(child, target);
-      if (found) return found;
-    }
-    return null;
-  };
-
-  const renderTree = () => {
+  const renderTree = useCallback(() => {
     if (!tree.root || !sceneRef.current) return;
 
     // シーンをクリア
@@ -228,8 +196,48 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
     directionalLight.position.set(5, 5, 5);
     sceneRef.current.add(directionalLight);
 
+    // ポイントライトの追加
+    const pointLight = new THREE.PointLight(0x9c27b0, 1, 10);
+    pointLight.position.set(0, 5, 5);
+    sceneRef.current.add(pointLight);
+
     // ルートノードから描画開始
     renderNode(tree.root, new THREE.Vector3(0, 5, 0));
+  }, [tree.root]);
+
+  const handleKeyPress = useCallback(
+    (event: KeyboardEvent) => {
+      if (!selectedNode) return;
+
+      if (event.key === 'a' || event.key === 'A') {
+        // ノードの追加
+        const newNode = selectedNode.add(`Child ${selectedNode.children.length + 1}`);
+        setSelectedNode(newNode);
+        renderTree();
+      } else if (event.key === 'd' || event.key === 'D') {
+        // ノードの削除
+        if (selectedNode !== tree.root) {
+          const parent = findParentNode(tree.root!, selectedNode);
+          if (parent) {
+            parent.remove(selectedNode.data);
+            setSelectedNode(null);
+            renderTree();
+          }
+        }
+      }
+    },
+    [selectedNode, tree.root, renderTree]
+  );
+
+  const findParentNode = (current: Node<string>, target: Node<string>): Node<string> | null => {
+    if (current.children.includes(target)) {
+      return current;
+    }
+    for (const child of current.children) {
+      const found = findParentNode(child, target);
+      if (found) return found;
+    }
+    return null;
   };
 
   const renderNode = (node: Node<string>, position: THREE.Vector3, depth: number = 0) => {
@@ -282,50 +290,53 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
     }
   };
 
-  const handleMouseMove = (event: MouseEvent) => {
-    if (!sceneRef.current || !cameraRef.current) return;
+  const handleMouseMove = useCallback(
+    (event: MouseEvent) => {
+      if (!sceneRef.current || !cameraRef.current) return;
 
-    // マウス位置の正規化
-    mouseRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouseRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      // マウス位置の正規化
+      mouseRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouseRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    // レイキャスト
-    raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
-    const intersects = raycasterRef.current.intersectObjects(sceneRef.current.children, true);
+      // レイキャスト
+      raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
+      const intersects = raycasterRef.current.intersectObjects(sceneRef.current.children, true);
 
-    let foundNode = false;
-    if (intersects.length > 0) {
-      let hoveredObject = intersects[0].object;
-      let currentNode = hoveredObject.userData.node;
+      let foundNode = false;
+      if (intersects.length > 0) {
+        let hoveredObject = intersects[0].object;
+        let currentNode = hoveredObject.userData.node;
 
-      // グループ内のオブジェクトをホバーした場合、親のグループを探す
-      while (!currentNode && hoveredObject.parent) {
-        currentNode = hoveredObject.parent.userData.node;
-        hoveredObject = hoveredObject.parent;
-      }
+        // グループ内のオブジェクトをホバーした場合、親のグループを探す
+        while (!currentNode && hoveredObject.parent) {
+          currentNode = hoveredObject.parent.userData.node;
+          hoveredObject = hoveredObject.parent;
+        }
 
-      if (currentNode) {
-        foundNode = true;
-        if (currentNode !== lastHoveredNodeRef.current) {
-          lastHoveredNodeRef.current = currentNode;
-          setIsHoveringNode(true);
-          updateCursor(true);
+        if (currentNode) {
+          foundNode = true;
+          if (currentNode !== lastHoveredNodeRef.current) {
+            lastHoveredNodeRef.current = currentNode;
+            setIsHoveringNode(true);
+            updateCursor(true);
+          }
         }
       }
-    }
 
-    if (!foundNode && isHoveringNode) {
-      lastHoveredNodeRef.current = null;
-      setIsHoveringNode(false);
-      updateCursor(false);
-    }
-  };
+      if (!foundNode && isHoveringNode) {
+        lastHoveredNodeRef.current = null;
+        setIsHoveringNode(false);
+        updateCursor(false);
+      }
+    },
+    [isHoveringNode]
+  );
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     lastHoveredNodeRef.current = null;
     setIsHoveringNode(false);
     updateCursor(false);
-  };
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -343,11 +354,11 @@ const TreeVisualization: React.FC<TreeVisualizationProps> = ({ tree }) => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [selectedNode, isHoveringNode]);
+  }, [handleClick, handleKeyPress, handleMouseMove, handleMouseLeave]);
 
   useEffect(() => {
     renderTree();
-  }, [tree, selectedNode]);
+  }, [tree, selectedNode, renderTree]);
 
   return (
     <motion.div
